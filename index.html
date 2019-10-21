@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <style>
+        body {
+            font: 14px sans-serif;
+        }
+        
+        #container {
+            width: 1200px;
+            height: 800px;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+
+        .dot {
+            stroke: #000;
+        }
+
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background-color: white;
+            padding: 10px;
+            opacity: 0;
+            outline: 1px solid black;
+        }
+        
+        .tooltip div {
+            display: block;
+            padding: 0.5em 0;
+            border-bottom: 1px solid #555;
+        }
+        .tooltip div:first-child {
+            padding-top: 0;
+        }
+        .tooltip div:last-child {
+            padding-bottom: 0;
+            border-bottom: 0px solid #555;
+        }
+        
+        #slider_outer {
+            width: 1200px;
+            height: 85px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }        
+        #slider_outer .row {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            width: 100%;
+        }        
+        #slider_outer p {
+            font-weight: bold;
+            padding: 0 10px;
+            margin: 0;
+            color: rebeccapurple;
+        }
+        #slider_outer p:last-of-type {
+            color: deepskyblue;
+        }
+        
+        #slider_inner {
+            width: 40%;
+            text-align: center;
+        }
+        #slider {
+          -webkit-appearance: none !important;
+          width: 100%;
+          height: 15px;
+          background-color: #ddedd9;
+          border: 1px solid #97c68b;
+          border-radius: 10px;
+          margin: auto;
+          transition: all 0.3s ease;
+            outline: none;
+        }
+        #slider::-webkit-slider-thumb {
+          -webkit-appearance: none !important;
+          width: 20px;
+          height: 20px;
+          background-color: #579E81;
+          border-radius: 30px;
+          box-shadow: 0px 0px 3px #3c6d59;
+          transition: all 0.5s ease;
+        }
+        #slider::-webkit-slider-thumb:hover {
+          background-color: #457d66;
+        }
+        #slider::-webkit-slider-thumb:active {
+          box-shadow: 0px 0px 1px #3c6d59;
+        }
+        input[type="button"] {
+            margin-top: 10px;
+        }
+
+        @media only screen and (max-width: 1200px) {
+            #container {
+                width: 100%;
+                height: auto;
+            }
+            #slider_outer {
+                width: 100%;
+            }
+        }
+
+
+    </style>
+</head>
+
+<body>
+    
+    <!--from: https://codepen.io/thehonestape/pen/yjlGi -->
+    <div id="slider_outer">
+      <div class="row">
+       <p>Only IMDB Scores</p>
+        <div id="slider_inner">
+            <input id="slider" type="range" min="0" max="100" oninput="changeDotOpacity(value)"/>
+            <input type="button" value="reset" onclick="resetSlider()" >
+            
+        </div>
+       <p>Only Jump Scare Scores</p>
+       </div>
+    </div>
+    
+    <div id="container"></div>
+
+    <script src="d3.js"></script>
+    <script>
+
+        // Example based on https://bl.ocks.org/d3noob/6f082f0e3b820b6bf68b78f2f7786084 
+        // some ideas taken from http://bl.ocks.org/weiglemc/6185069
+
+        //console.log("running jumpscare scatterplot");
+
+        var margin = {top: 40, bottom: 40, left: 40, right: 40},
+            width = 1200 - margin.left - margin.right,
+            height = 800 - margin.top - margin.bottom;
+
+        // setup x = years
+        var xValue = function(d) { return d.year}, // data -> value
+            xScale = d3.scaleLinear().range([0, width]);
+
+        // setup y = imdb score
+        var yValue = function(d) { return d.imdb },
+            yScale = d3.scaleLinear().range([height, 0]);
+
+        // setup y #2 = jump scare score
+        // convert the 0-5 to a 0-10 range to match imdb.
+        var yValueJumpScare = function(d) { return d.jump_scare_rating };
+            yScaleJumpScare = d3.scaleLinear().domain([0, 5]).range([0, 10]);
+        
+        // add svg to the page
+        var svg = d3.select("#container").append("svg")
+              .attr("preserveAspectRatio", "xMinYMin meet")
+              .attr("viewBox", "0 0 " + (width + margin.left + margin.right) + " " + (height + margin.top + margin.bottom) )   // updated to viewbox for better responsiveness
+                //.attr("width", width + margin.left + margin.right)
+                //.attr("height", height + margin.top + margin.bottom)
+            .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+        // add the tooltip area
+        var tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+
+        // load our dataaaaa
+        d3.csv("jump_scare_df.csv").then(function(data) {
+            
+            //console.log(data);
+            // director
+            // imdb
+            // jump_count
+            // jump_scare_rating
+            // movie name
+            // url
+            // year            
+
+            // change string (from CSV) into number format
+            data.forEach(function(data, i) {
+                data.imdb = +data.imdb;
+                data.year = +data.year;
+                data.jump_count = +data.jump_count;
+                data.jump_scare_rating = +data.jump_scare_rating;
+                
+                // converting the jump_scare_rating to a 0-10 range.
+                data.jump_scare_rating = yScaleJumpScare( data.jump_scare_rating)
+                
+                if (data.year < 1960) {
+                    remove = i;
+                }
+            })
+            
+            //console.log(data[0]);
+            
+            // clip out the entry from 1942 to focus the graph a little better.
+            data.splice(remove, 1)         
+            
+            setupMainChart(data);            
+            setupSecondaryChart(data);    
+
+        })
+        
+        
+        function setupMainChart(data) {
+                        
+            // scale the range of the data
+            // add a buffer in all directions so dots don't overlap the axis.
+            xScale.domain( [d3.min(data, xValue)-1, d3.max(data, xValue)+1] )
+            yScale.domain( [-0.5, 10] )
+            
+            svg.append("g")
+                .attr("id", "imdb_wrapper")
+                .selectAll("dot")
+                .data(data)
+                .enter().append("circle")
+                .attr("class", "imdb_dot")
+                .attr("r", 5)
+                .attr("cx", function(d) {return xScale( xValue(d) )})
+                .attr("cy", function(d) {return yScale( yValue(d) )})
+                .attr("fill", "rebeccapurple")
+                .attr("fill-opacity", 0.8)
+                .on("mouseover", handleMouseOver)
+                .on("mouseout", handleMouseOut);
+                 
+
+            // x axis
+            var xAxis = d3.axisBottom()
+                .scale(xScale)
+                .tickFormat(d3.format("d"))
+                .ticks(20);
+
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xAxis)
+            .append("text")
+                .attr("class", "label")
+                .attr("x", width)
+                .attr("y", -6)
+                .style("text-anchor", "end")
+                .style("fill", "black")
+                .text("Year");
+
+            
+            // y axis
+            var yAxis = d3.axisLeft()
+                .scale(yScale)
+                .ticks(10);
+
+            svg.append("g")
+                .call(yAxis)
+                .append("text")
+                  .attr("class", "label")
+                  .attr("transform", "rotate(-90)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                .style("fill", "black")
+                  .text("Score");
+            
+        }
+
+        function setupSecondaryChart(data) {
+            
+            svg.append("g")
+                .attr("id", "jump_scare_wrapper")
+                .selectAll("dot")
+                .data(data)
+                .enter().append("circle")
+                .attr("class", "jump_scare_dot")
+                .attr("r", 5)
+                .attr("cx", function(d) {return xScale( xValue(d) )})
+                .attr("cy", function(d) {return yScale( yValueJumpScare(d) )})
+                .attr("fill", "deepskyblue")
+                .attr("fill-opacity", 0.8)
+                  .on("mouseover", handleMouseOver)
+                  .on("mouseout", handleMouseOut);
+            
+                  
+        }
+                
+        // pattern from http://bl.ocks.org/WilliamQLiu/76ae20060e19bf42d774
+        
+        function handleMouseOver(d,i) {
+            
+            d3.select(this).attr("fill", "orange");
+            
+            var year =  d.year,
+                score = d.imdb,
+                jumpScore = d.jump_scare_rating,
+                movieName = d.movie_name,
+                type = d3.select(this).attr("class"),
+                html = "";
+            
+            //console.log(year, score, jumpScore, type);
+            
+            function makeHTML(d2, nodes) {
+                
+                var tempHtml = `<div>Title: ${d2.movie_name}<br/>IMDB Score: ${d2.imdb} <br/>Scare Score: ${d2.jump_scare_rating}<br/>Year: ${d2.year}</div>`;
+
+                html += tempHtml;
+            }
+
+            // find all nodes that share the same year and score as the current hovered dot
+            var nodes = d3.selectAll("circle." + type)
+                .filter(function(d) {
+                    if (type == "imdb_dot") {
+                        return d.year == year && d.imdb == score
+                    } else {
+                        return d.year == year && d.jump_scare_rating == jumpScore
+                    }
+                })
+                .each(makeHTML)            
+            
+            // find the node that shares the title and make them light up red
+            // BUG: if dots are stacked, you won't always be able to see the red one.
+            // z index for svg is not a thing :(
+            var nodes2 = d3.selectAll("circle:not(." + type + ")")
+                .filter(function(d) { return d.movie_name == movieName })
+                .attr("fill", "red");
+
+             tooltip.transition()
+                   .duration(200)
+                   .style("opacity", .9);
+              tooltip.html(html)
+                   .style("left", (d3.event.pageX + 5) + "px")
+                   .style("top", (d3.event.pageY - 28) + "px");
+        }
+        
+        function handleMouseOut(d,i) {
+            
+            // Forces all dots to reset color on mouse out. Brute force but it works.
+            
+            d3.selectAll("circle.imdb_dot")
+                .attr("fill", "rebeccapurple");            
+            
+            d3.selectAll("circle.jump_scare_dot")
+                .attr("fill", "deepskyblue");
+            
+              tooltip.transition()
+                   .duration(500)
+                   .style("opacity", 0);
+        }
+        
+        function changeDotOpacity(value) {
+            //console.log("changed ", value);
+            
+            var opacityScaleIMDB = d3.scaleLinear().domain([50, 100]).range([1, 0]);
+            var opacityScaleJS = d3.scaleLinear().domain([0, 50]).range([0, 1]);
+            
+            var opacityIMDB = opacityScaleIMDB(value);
+            var opacityJS = opacityScaleJS(value);
+            
+            svg.selectAll("g#imdb_wrapper")
+                .attr("opacity", opacityIMDB)
+                .attr("display", opacityIMDB == 0 ? "none" : "block")            
+            
+            svg.selectAll("g#jump_scare_wrapper")
+                .attr("opacity", opacityJS)
+                .attr("display", opacityJS == 0 ? "none" : "block")  
+                         
+        }
+        
+        
+        function resetSlider(){
+            document.getElementById("slider").value = 50;
+            changeDotOpacity(50)
+        }
+
+
+    </script>
+</body>
